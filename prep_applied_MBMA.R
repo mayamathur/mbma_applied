@@ -106,6 +106,7 @@ d = scrape_meta(est = RR,
 d = d %>% rename(vi = vyi)
 d$sei = sqrt(d$vi)
 d$pval = 2 * ( 1 - pnorm( abs( d$yi/sqrt(d$vi) ) ) )
+d$affirm = d$yi > 0 & d$pval < 0.05
 
 d$effect.measure = "log-rr"
 
@@ -169,6 +170,7 @@ d = scrape_meta(est = RR,
 d = d %>% rename(vi = vyi)
 d$sei = sqrt(d$vi)
 d$pval = 2 * ( 1 - pnorm( abs( d$yi/sqrt(d$vi) ) ) )
+d$affirm = d$yi > 0 & d$pval < 0.05
 
 d$effect.measure = "log-rr"
 
