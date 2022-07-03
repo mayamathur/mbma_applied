@@ -15,6 +15,8 @@
 # Notation in results files:
 #  - "unadj" suffix in analysis name means unadjusted for confounding, but could be adjusted for pub bias
 
+# To do:
+# - If using AWR in paper, note that there I used modelweights = HIER, which slightly affects naive meta-analysis results
 
 # PRELIMINARIES ---------------------------------------------------------------
 
@@ -70,27 +72,25 @@ options(scipen=999)
 
 # ANALYZE THEM :) ---------------------------------------------------------------
 
-meta.names = c("kalantarian_all")
+meta.names = c("kalantarian_all",
+               "mathur")
 
 # to run only one
-meta.names = "kalantarian_stroke_hx"
+meta.names = "mathur"
 
 for ( i in 1:length(meta.names) ) {
 
   
   meta.name = meta.names[i]
   
+  # get prepped data
+  setwd(data.dir)
+  d = fread( paste(meta.name, "prepped.csv", sep = "_"))
+  
   # ~ Set up parameters specific to this meta-analysis -----------
   
   if ( meta.name == "kalantarian_all" ) {
-    
-    # for stats_for_paper.csv
-    short.name = meta.name
-    
-    # get prepped data
-    setwd(data.dir)
-    d = fread( paste(meta.name, "prepped.csv", sep = "_"))
-    
+
     # effect size transformation
     z.to.r = FALSE
     take.exp.inv = FALSE
@@ -102,6 +102,33 @@ for ( i in 1:length(meta.names) ) {
     
     # decide which studies are confounded
     Ci = rep(1, nrow(d))
+    
+    # fixed eta
+    # c.f. SAPB-E: for top med metas, mean etahat=1.02 and Q95 = 1.62
+    eta = 2
+    
+    # # vector of selection probabilities to use for all specifications
+    # # more dense at the very small ones
+    # eta.vec = rev( seq(1, 200, 0.25) )
+    # #eta.vec = c( 20, rev(seq(1,15,1)) )
+    # # as a list
+    # el = as.list( eta.vec )
+  }
+  
+  
+  if ( meta.name == "mathur" ) {
+    
+    # effect size transformation
+    z.to.r = FALSE
+    take.exp.inv = FALSE
+    take.exp = TRUE
+    transf.name = "exp"  # just used for reporting
+    
+    # threshold for effect sizes
+    q = log(1)
+    
+    # decide which studies are confounded
+    Ci = d$randomized
     
     # fixed eta
     # c.f. SAPB-E: for top med metas, mean etahat=1.02 and Q95 = 1.62
@@ -131,6 +158,15 @@ for ( i in 1:length(meta.names) ) {
                        studynum = cluster,
                        var.eff.size = vi,
                        small = TRUE ) )
+  
+  # from AWR (note use of hierarchical model weights):
+  # ( meta.rob = robu( logRR ~ 1,
+  #                    data = d,
+  #                    studynum = as.factor(authoryear),
+  #                    var.eff.size = varlogRR,
+  #                    modelweights = "HIER",
+  #                    small = TRUE) )
+  
   
   res = report_meta(meta.naive,
                     .mod.type = "robu",
@@ -256,6 +292,40 @@ for ( i in 1:length(meta.names) ) {
                   tol = 0.001 )
   }
   
+  # ** sanity check: 
+  #  if NOT all studies are confounded
+  if ( !all(Ci == 1) ) {
+    
+    mod.naive = rma.uni(yi = d$yi, vi = d$vi)
+    wi = 1 / (d$vi + mod.naive$tau2)
+    
+    # this isn't in the theory; I made it up:
+    nu_allStar = eta*sum( wi[d$affirm == FALSE] ) + sum( wi[d$affirm == TRUE] )
+    nu_Cstar = eta*sum( wi[d$affirm == FALSE & Ci == TRUE] ) + sum( wi[d$affirm == TRUE & Ci == TRUE] )
+    
+    
+    # proportion of precision in UNDERLYING studies that is from confounded ones
+    ( lambdaStar = nu_Cstar / nu_allStar )
+    # if eta = 1, should be a similar to observed mean(Ci)
+    #  but not equal because lambdaStar is about precision rather than just number of studies
+    # larger eta => lambdaStar should increase
+    #@for AWR, lambdaStar is almost the same for eta=1 and eta=100
+    mean(Ci)
+    
+    ( EB_est_mine = log( res$Mhat[ res$Analysis == "mbma-unadj" ] ) / lambdaStar )
+    ( EB_ci_mine = log( res$MLo[ res$Analysis == "mbma-unadj" ] ) / lambdaStar )
+    
+    #bm: investigating this separately
+    #@NOT QUITE THE SAME, BUT SIMILAR:
+    expect_equal( res2$EB_est[ res2$eta_assumed == eta ],
+                  EB_est_mine,
+                  tol = 0.001 )
+    
+    expect_equal( exp( res2$EB_ci[ res2$eta_assumed == eta ] ),
+                  res$MLo[ res$Analysis == "mbma-unadj" ],
+                  tol = 0.001 )
+  }
+  
   
   # Less important sanity checks:
   # # sanity check: should be 0
@@ -363,28 +433,28 @@ for ( i in 1:length(meta.names) ) {
   # 
   # ##### One-Off Stats for Paper #####
   # 
-  # update_result_csv( name = paste( short.name, " k" ),
+  # update_result_csv( name = paste( meta.name, " k" ),
   #                    value = nrow(d) )
   # 
-  # update_result_csv( name = paste( short.name, " k affirm" ),
+  # update_result_csv( name = paste( meta.name, " k affirm" ),
   #                    value = sum(d$affirm == TRUE) )
   # 
-  # update_result_csv( name = paste( short.name, " k nonaffirm" ),
+  # update_result_csv( name = paste( meta.name, " k nonaffirm" ),
   #                    value = sum(d$affirm == FALSE) )
   # 
-  # update_result_csv( name = paste( short.name, " k" ),
+  # update_result_csv( name = paste( meta.name, " k" ),
   #                    value = nrow(d) )
   # 
-  # update_result_csv( name = paste( short.name, "estNaive" ),
+  # update_result_csv( name = paste( meta.name, "estNaive" ),
   #                    value = my_round( estNaive, 2 ) )
   # 
-  # update_result_csv( name = paste( short.name, "estNaive lo" ),
+  # update_result_csv( name = paste( meta.name, "estNaive lo" ),
   #                    value = my_round( loNaive, 2 ) )
   # 
-  # update_result_csv( name = paste( short.name, "estNaive hi" ),
+  # update_result_csv( name = paste( meta.name, "estNaive hi" ),
   #                    value = my_round( hiNaive, 2 ) )
   # 
-  # update_result_csv( name = paste( short.name, "estNaive pval" ),
+  # update_result_csv( name = paste( meta.name, "estNaive pval" ),
   #                    value = format.pval( pvalNaive, eps = 0.0001 ) )
   # 
   # 
@@ -426,8 +496,8 @@ for ( i in 1:length(meta.names) ) {
   #   axis.font.size = 16
   #   axis.label.size = 20
   #   
-  #   if (short.name == "Li") ylabel = "Corrected estimate (HR)"
-  #   if (short.name == "Ali") ylabel = "Corrected estimate (BMD % change)"
+  #   if (meta.name == "Li") ylabel = "Corrected estimate (HR)"
+  #   if (meta.name == "Ali") ylabel = "Corrected estimate (BMD % change)"
   #   
   #   p.rob = ggplot( ) +
   #     # "q" line
@@ -494,13 +564,13 @@ for ( i in 1:length(meta.names) ) {
   # #################### ~~ SAVE ALL THE THINGS #################### 
   # 
   # # plots
-  # if ( redo.line.plot == TRUE ) ggsave( filename = paste( short.name, "_robu_plot.png", sep = "" ),
+  # if ( redo.line.plot == TRUE ) ggsave( filename = paste( meta.name, "_robu_plot.png", sep = "" ),
   #                                       device = "png",
   #                                       p.rob,
   #                                       width = 9,
   #                                       height = 6)
   # 
-  # ggsave( filename = paste( short.name, "_funnel.png", sep = "" ),
+  # ggsave( filename = paste( meta.name, "_funnel.png", sep = "" ),
   #         device = "png",
   #         p.funnel,
   #         width = 6,
@@ -508,13 +578,13 @@ for ( i in 1:length(meta.names) ) {
   # 
   # # also save straight to Overleaf
   # setwd(overleaf.dir)
-  # if ( redo.line.plot == TRUE ) ggsave( filename = paste( short.name, "_robu_plot.png", sep = "" ),
+  # if ( redo.line.plot == TRUE ) ggsave( filename = paste( meta.name, "_robu_plot.png", sep = "" ),
   #                                       device = "png",
   #                                       p.rob,
   #                                       width = 9,
   #                                       height = 6)
   # 
-  # ggsave( filename = paste( short.name, "_funnel.png", sep = "" ),
+  # ggsave( filename = paste( meta.name, "_funnel.png", sep = "" ),
   #         device = "png",
   #         p.funnel,
   #         width = 6,

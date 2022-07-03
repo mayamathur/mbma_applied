@@ -49,6 +49,40 @@ options(scipen=999)
 
 
 
+# EXAMPLE: AWR -----------------------------------------
+
+# using this because has a clear randomized vs. nonrandomized indicator
+setwd("~/Dropbox/Personal computer/Reference sheets/Library of prepped example meta-analyses/MRM")
+
+d = fread("mathur_awr_prepped.csv")
+
+d = d %>% filter( exclude.main == FALSE )
+expect_equal( nrow(d), 100 )
+expect_equal( length(unique(d$authoryear)), 34 )
+
+table(d$randomized)
+
+d$yi = d$logRR
+d$vi = d$varlogRR
+d$sei = sqrt(d$vi)
+d$pval = 2 * ( 1 - pnorm( abs( d$yi/sqrt(d$vi) ) ) )
+d$affirm = d$yi > 0 & d$pval < 0.05
+
+
+# no apparent clustering from the forest plot
+d$cluster = d$authoryear
+
+
+d = d %>% add_column(.before = 1,
+                     meta.name = "mathur")
+
+# save it
+setwd(data.dir)
+fwrite(d, "mathur_prepped.csv")
+
+
+
+
 # EXAMPLE (ROBUST): ATRIAL FIBRILLATION & COGNITIVE IMPAIRMENT -----------------------------------------
 
 # Kalantarian (saved PDF)

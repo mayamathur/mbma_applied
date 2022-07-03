@@ -133,6 +133,9 @@ corrected_meta_mbma = function(dat,
   ( MhatB = (1/denom) * ( P.nonaffirm.pub * eta * EB.nonaffirm.obs +
                             P.affirm.pub * EB.affirm.obs ) )
   
+  # c.f. bias in *published* studies (will be larger than MhatB):
+  #  P.nonaffirm.pub * EB.nonaffirm.obs + P.affirm.pub * EB.affirm.obs
+  
   
   # adjusted yi's using the estimated MhatB
   dat$yi.adj.est = dat$yi - dat$Ci * MhatB
