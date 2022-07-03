@@ -107,7 +107,10 @@ corrected_meta_mbma = function(dat,
                                # effect-size transformations for reporting
                                # see report_meta for info
                                transformation = function(x) x,
-                               transformed.scale.name = ""
+                               transformed.scale.name = "",
+                               
+                               # for pasting the analysis label
+                               suffix = NA
 ) {
   
   dat$Ci = Ci
@@ -155,9 +158,10 @@ corrected_meta_mbma = function(dat,
                     var.eff.size = vi,
                     small = TRUE )
   
+  label = ifelse( is.na(suffix), "mbma", paste("mbma", suffix, sep = "-") )
   .res = report_meta(meta.mbma,
                      .mod.type = "robu",
-                     .analysis.label = "mbma",
+                     .analysis.label = label,
                      .transformation = transformation,
                      .transformed.scale.name = transformed.scale.name)
   
