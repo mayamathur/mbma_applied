@@ -70,8 +70,7 @@ options(scipen=999)
 
 # ANALYZE THEM :) ---------------------------------------------------------------
 
-meta.names = c("kalantarian_all",
-               "kalantarian_stroke_hx")
+meta.names = c("kalantarian_all")
 
 # to run only one
 meta.names = "kalantarian_stroke_hx"
@@ -83,7 +82,7 @@ for ( i in 1:length(meta.names) ) {
   
   # ~ Set up parameters specific to this meta-analysis -----------
   
-  if ( meta.name %in% c( "kalantarian_all", "kalantarian_stroke_hx" ) ) {
+  if ( meta.name == "kalantarian_all" ) {
     
     # for stats_for_paper.csv
     short.name = meta.name
