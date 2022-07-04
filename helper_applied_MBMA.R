@@ -161,6 +161,10 @@ corrected_meta_mbma = function(dat,
                     var.eff.size = vi,
                     small = TRUE )
   
+  # sanity check: compare to direct calculation of user-weighted estimator
+  expect_equal( as.numeric( meta.mbma$b.r ),
+                sum( dat$yi.adj.est * ( weights / (dat$vi + t2hat.naive) ) ) / sum( weights / (dat$vi + t2hat.naive) ) )
+  
   label = ifelse( is.na(suffix), "mbma", paste("mbma", suffix, sep = "-") )
   .res = report_meta(meta.mbma,
                      .mod.type = "robu",

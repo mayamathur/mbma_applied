@@ -16,7 +16,8 @@
 #  - "unadj" suffix in analysis name means unadjusted for confounding, but could be adjusted for pub bias
 
 # To do:
-# - If using AWR in paper, note that there I used modelweights = HIER, which slightly affects naive meta-analysis results
+# - If using AWR in paper, note that for that analysis, I used modelweights = HIER, which slightly affects naive meta-analysis results
+
 
 # PRELIMINARIES ---------------------------------------------------------------
 
@@ -76,7 +77,7 @@ meta.names = c("kalantarian_all",
                "mathur")
 
 # to run only one
-meta.names = "mathur"
+#meta.names = "mathur"
 
 for ( i in 1:length(meta.names) ) {
 
@@ -128,7 +129,7 @@ for ( i in 1:length(meta.names) ) {
     q = log(1)
     
     # decide which studies are confounded
-    Ci = d$randomized
+    Ci = ( d$randomized == FALSE )
     
     # fixed eta
     # c.f. SAPB-E: for top med metas, mean etahat=1.02 and Q95 = 1.62
@@ -175,7 +176,7 @@ for ( i in 1:length(meta.names) ) {
                     .transformed.scale.name = transf.name)
   
   
-  
+  cat("\nFlag1")
   
   # ~ Worst-case SAPB without confounding adjustment -----------
   
@@ -255,7 +256,7 @@ for ( i in 1:length(meta.names) ) {
   
   res = bind_rows(res, meta.mbma.row)
   
-  
+  cat("\nFlag2")
   
   # ~ MBMA E-values for fixed etas -----------
   
@@ -291,67 +292,9 @@ for ( i in 1:length(meta.names) ) {
                   res$MLo[ res$Analysis == "mbma-unadj" ],
                   tol = 0.001 )
   }
+  # for many more sanity checks, see 2022-7-3 check theory vs. R
   
-  # ** sanity check: 
-  #  if NOT all studies are confounded
-  if ( !all(Ci == 1) ) {
-    
-    mod.naive = rma.uni(yi = d$yi, vi = d$vi)
-    wi = 1 / (d$vi + mod.naive$tau2)
-    
-    # this isn't in the theory; I made it up:
-    nu_allStar = eta*sum( wi[d$affirm == FALSE] ) + sum( wi[d$affirm == TRUE] )
-    nu_Cstar = eta*sum( wi[d$affirm == FALSE & Ci == TRUE] ) + sum( wi[d$affirm == TRUE & Ci == TRUE] )
-    
-    
-    # proportion of precision in UNDERLYING studies that is from confounded ones
-    ( lambdaStar = nu_Cstar / nu_allStar )
-    # if eta = 1, should be a similar to observed mean(Ci)
-    #  but not equal because lambdaStar is about precision rather than just number of studies
-    # larger eta => lambdaStar should increase
-    #@for AWR, lambdaStar is almost the same for eta=1 and eta=100
-    mean(Ci)
-    
-    ( EB_est_mine = log( res$Mhat[ res$Analysis == "mbma-unadj" ] ) / lambdaStar )
-    ( EB_ci_mine = log( res$MLo[ res$Analysis == "mbma-unadj" ] ) / lambdaStar )
-    
-    #bm: investigating this separately
-    #@NOT QUITE THE SAME, BUT SIMILAR:
-    expect_equal( res2$EB_est[ res2$eta_assumed == eta ],
-                  EB_est_mine,
-                  tol = 0.001 )
-    
-    expect_equal( exp( res2$EB_ci[ res2$eta_assumed == eta ] ),
-                  res$MLo[ res$Analysis == "mbma-unadj" ],
-                  tol = 0.001 )
-  }
-  
-  
-  # Less important sanity checks:
-  # # sanity check: should be 0
-  # corrected_meta_mbma(dat = d,
-  #                     cluster = d$cluster,
-  #                     Ci = Ci,
-  #                     
-  #                     # sens params
-  #                     EB.affirm.obs = evals$EB_est,
-  #                     EB.nonaffirm.obs = evals$EB_est,
-  #                     
-  #                     eta = 2 )
-  
-  # # sanity check: should be very close to Mhat=0? No pub bias.
-  # # but not exactly equal because t2hat.naive could change
-  # corrected_meta_mbma(dat = d,
-  #                     cluster = d$cluster,
-  #                     Ci = Ci,
-  #                     
-  #                     # sens params
-  #                     EB.affirm.obs = log( res$Mhat[ res$Analysis == "naive" ] ),
-  #                     EB.nonaffirm.obs = log( res$Mhat[ res$Analysis == "naive" ] ),
-  #                     
-  #                     eta = 1 )
-  
-  
+  cat("\nFlag3")
   
   # ~ Save Results Locally -----------
   setwd(results.dir)
@@ -593,5 +536,7 @@ for ( i in 1:length(meta.names) ) {
   
   
 }  # end huge for-loop over meta-analyses
+
+
 
 
