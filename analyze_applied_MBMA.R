@@ -61,6 +61,8 @@ results.dir = str_replace_all( string = here(),
                                pattern = "Code",
                                replacement = "Results" ) 
 
+overleaf.dir = "/Users/mmathur/Dropbox/Apps/Overleaf/Multiple-bias meta-analysis Overleaf (MBMA)/R_objects"
+
 
 # get helper fns
 setwd(code.dir)
@@ -88,6 +90,10 @@ for ( i in 1:length(meta.names) ) {
   setwd(data.dir)
   d = fread( paste(meta.name, "prepped.csv", sep = "_"))
   
+  # fixed eta
+  # c.f. SAPB-E: for top med metas, mean etahat=1.02 and Q95 = 1.62
+  eta = 4
+  
   # ~ Set up parameters specific to this meta-analysis -----------
   
   if ( meta.name == "kalantarian_all" ) {
@@ -103,11 +109,7 @@ for ( i in 1:length(meta.names) ) {
     
     # decide which studies are confounded
     Ci = rep(1, nrow(d))
-    
-    # fixed eta
-    # c.f. SAPB-E: for top med metas, mean etahat=1.02 and Q95 = 1.62
-    eta = 2
-    
+
     # # vector of selection probabilities to use for all specifications
     # # more dense at the very small ones
     # eta.vec = rev( seq(1, 200, 0.25) )
@@ -130,11 +132,7 @@ for ( i in 1:length(meta.names) ) {
     
     # decide which studies are confounded
     Ci = ( d$randomized == FALSE )
-    
-    # fixed eta
-    # c.f. SAPB-E: for top med metas, mean etahat=1.02 and Q95 = 1.62
-    eta = 2
-    
+
     # # vector of selection probabilities to use for all specifications
     # # more dense at the very small ones
     # eta.vec = rev( seq(1, 200, 0.25) )
@@ -234,7 +232,7 @@ for ( i in 1:length(meta.names) ) {
   
   
   
-  # ~ MBMA with fixed eta, EB.affirm.obs, EB.nonaffirm.obs -----------
+  # ~ MBMA: fixed eta, EB.affirm.obs, EB.nonaffirm.obs -----------
   
   ( meta.mbma.row = corrected_meta_mbma(dat = d,
                                         cluster = d$cluster,
@@ -258,17 +256,18 @@ for ( i in 1:length(meta.names) ) {
   
   cat("\nFlag2")
   
-  # ~ MBMA E-values for fixed etas -----------
+  
+  # ~ MBMA: E-values for fixed etas -----------
   
   # start new results df for E-values
   res2 = evalue_mbma(dat = d,
                      Ci = Ci,
-                     eta = 2,
+                     eta = eta,
                      EB_grid_hi = log(10),
                      q = 0)
-  
 
   
+
   # and with eta = 1
   new.row = evalue_mbma(dat = d,
                         Ci = Ci,
@@ -291,13 +290,110 @@ for ( i in 1:length(meta.names) ) {
     expect_equal( exp( res2$EB_ci[ res2$eta_assumed == eta ] ),
                   res$MLo[ res$Analysis == "mbma-unadj" ],
                   tol = 0.001 )
+
+    
   }
   # for many more sanity checks, see 2022-7-3 check theory vs. R
   
+
   cat("\nFlag3")
   
+  
+  # ~ MBMA: E-values for worst-case eta -----------
+  
+  # for this one, can just directly apply E-value to worst-case estimate on RR scale
+  temp = evalue( RR(res$Mhat[res$Analysis == "worst-unadj"] ),
+          RR(res$MLo[res$Analysis == "worst-unadj"] ) )
+  
+  # not putting Eb_est, etc. for this one because we're not reporting on that scale anyway
+  res2 = res2 %>% add_row( EB_est = NA, EB_ci = NA, eval_est = temp["E-values", "point"], eval_ci = temp["E-values", "lower"], eta_assumed = Inf )
+  
+  
+  
+  
   # ~ Save Results Locally -----------
+  
+  # ~~ One-off stats ---------------------------
   setwd(results.dir)
+  update_result_csv( name = paste( meta.name, " k" ),
+                     value = nrow(d) )
+
+  update_result_csv( name = paste( meta.name, " k affirm" ),
+                     value = sum(d$affirm == TRUE) )
+
+  update_result_csv( name = paste( meta.name, " k nonaffirm" ),
+                     value = sum(d$affirm == FALSE) )
+  
+  update_result_csv( name = paste( meta.name, " k perc nonaffirm" ),
+                     value = mean(d$affirm == FALSE)*100 )
+  
+  if ( meta.name == "mathur" ) {
+    update_result_csv( name = paste( meta.name, " k randomized" ),
+                       value = sum(d$randomized == TRUE) )
+    
+    update_result_csv( name = paste( meta.name, " k nonrandomized" ),
+                       value = sum(d$randomized == FALSE) )
+  }
+
+  
+  # lambdas
+  # @CHECK THESE! Especially naive tau issue
+  d$wi = 1/(d$vi + res$Shat[ res$Analysis == "naive" ]^2)
+  
+  if ( meta.name == "mathur" ) {
+    lambdaAc = sum( d$wi[d$affirm == FALSE & d$randomized == FALSE] ) / sum( d$wi[ d$affirm == FALSE ] ) 
+    lambdaA = sum( d$wi[d$affirm == TRUE & d$randomized == FALSE] ) / sum( d$wi[ d$affirm == TRUE ] ) 
+  }
+  
+  if ( meta.name == "kalantarian_all" ) {
+    # 1 becuase all studies confounded
+    lambdaAc = 1
+    lambdaA = 1 
+  }
+ 
+  update_result_csv( name = paste( meta.name, "lambdaAc" ),
+                     value = lambdaAc )
+  
+  
+  update_result_csv( name = paste( meta.name, "lambdaA" ),
+                     value = lambdaA )
+  
+  
+  # r ratio
+  r = sum( d$wi[ d$affirm == TRUE ] ) / sum( d$wi[ d$affirm == FALSE ] )
+  
+  update_result_csv( name = paste( meta.name, "r ratio" ),
+                     value = r )
+  
+
+  # attenuation % for uncorrected vs. fixed eta
+  atten_perc = 100*( (res$Mhat[res$Analysis == "naive"] - res$Mhat[res$Analysis == "mbma-unadj"]) / res$Mhat[res$Analysis == "naive"] )
+  update_result_csv( name = paste( meta.name, "attenutation perc" ),
+                     value = atten_perc )
+  
+  # save all corrected metas
+  update_result_csv( name = paste( meta.name, "Analysis=", res$Analysis, "Mhat" ),
+                     value = res$Mhat )
+  
+  update_result_csv( name = paste( meta.name, "Analysis=", res$Analysis, "MLo" ),
+                     value = res$MLo )
+  
+  update_result_csv( name = paste( meta.name, "Analysis=", res$Analysis, "MHi" ),
+                     value = res$MHi )
+  
+  update_result_csv( name = paste( meta.name, "Analysis=", res$Analysis, "MPval" ),
+                     value = res$MPval )
+  
+  
+  # save all E-values
+  update_result_csv( name = paste( meta.name, "eta=", res2$eta, "E-value est" ),
+                     value = res2$eval_est )
+  
+  update_result_csv( name = paste( meta.name, "eta=", res2$eta, "E-value CI" ),
+                     value = res2$eval_ci )
+  
+  
+
   
   fwrite(res, 
          paste(meta.name, "_corrected_metas.csv", sep = "") ) 
