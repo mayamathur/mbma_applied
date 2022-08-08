@@ -375,8 +375,8 @@ for ( i in 1:length(meta.names) ) {
                                                          transformed.scale.name = transf.name) ) )
     # for plotting joy
     dp$EB_obs_scen_pretty = NA
-    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.same" ] = "Assume affirmatives and nonaffirmatives moderately confounded"
-    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.different" ] = "Assume affirmatives highly confounded; nonaffirmatives unconfounded"
+    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.same" ] = "(A) Assume affirmatives and nonaffirmatives moderately confounded"
+    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.different" ] = "(B) Assume affirmatives highly confounded; nonaffirmatives unconfounded"
     
     
     # ~~ Version #1: Mhat from each analysis type -----------
@@ -419,7 +419,9 @@ for ( i in 1:length(meta.names) ) {
       
       facet_grid( ~ EB_obs_scen_pretty ) +
       
-      theme_bw() +
+      # base_size controls all text sizes; default is 11
+      # https://ggplot2.tidyverse.org/reference/ggtheme.html
+      theme_bw(base_size = 18) +
       theme( text = element_text(face = "bold"),
              panel.grid.major = element_blank(),
              panel.grid.minor = element_blank(),
@@ -483,13 +485,13 @@ for ( i in 1:length(meta.names) ) {
     
     my_ggsave(name = paste(meta.name, "multiple_Mhats_plot.pdf", sep = "_"),
               .plot = p1,
-              .width = 10,
-              .height = 5)
+              .width = 16,
+              .height = 8)
     
     my_ggsave(name = paste(meta.name, "Mhat_ratio_plot.pdf", sep = "_"),
               .plot = p2,
-              .width = 8,
-              .height = 5)
+              .width = 10,
+              .height = 8)
     
   }  # end "if ( meta.name == "mathur" & redo.plots == TRUE )"
   
