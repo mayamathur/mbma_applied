@@ -1,16 +1,6 @@
 
-
-# Goals:
-
-# For fixed eta:
-# - Get E-value for est and CI. Can't you just use existing PublicationBias::svalue after pre-shifting estimates? :)
-# - Sanity check: Compare that to the E-value obtained using Eq. 4.1 in Tier 2 (SAPB est / lambda thing)
-
-# Next: Try the dementia meta-analysis you saved :)
-
-# Idea for presentation in paper:
-#  - For fixed eta taken from SAPB-E
-#  - For worst-case eta
+# Note: This script shares a stats_for_paper.csv with the applied examples, so if you wr(), 
+#  you'll also need to rerun the applied examples.
 
 # Notation in results files:
 #  - "unadj" suffix in analysis name means unadjusted for confounding, but could be adjusted for pub bias
@@ -322,7 +312,7 @@ for ( i in 1:length(meta.names) ) {
     
     # plotting dataframe
     .eta_running = c( seq(1, 20, 1) )  # "running" to indicate this is the running var for x-axis, not the eta used in analysis
-    .group = c("None (uncorrected)", "Confounding only", "Publication bias only", "Both")
+    .group = c("None (uncorrected)", "Internal bias only", "Publication bias only", "Both")
     .EB.obs.scen = c("EB.obs.same", "EB.obs.different")
     
     dp = expand.grid( .eta_running,
@@ -332,10 +322,10 @@ for ( i in 1:length(meta.names) ) {
     
     # eta to use in analysis depends on group
     dp$eta_assumed = dp$eta_running
-    dp$eta_assumed[ dp$group %in% c("None (uncorrected)", "Confounding only") ] = 1
+    dp$eta_assumed[ dp$group %in% c("None (uncorrected)", "Internal bias only") ] = 1
     
     # EB.obs settings to use in analysis depends on group
-    conf_scens = c("Confounding only", "Both")
+    conf_scens = c("Internal bias only", "Both")
     dp$EB.nonaffirm.obs = 0
     dp$EB.affirm.obs = 0
     
@@ -375,8 +365,8 @@ for ( i in 1:length(meta.names) ) {
                                                          transformed.scale.name = transf.name) ) )
     # for plotting joy
     dp$EB_obs_scen_pretty = NA
-    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.same" ] = "(A) Assume affirmatives and nonaffirmatives moderately confounded"
-    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.different" ] = "(B) Assume affirmatives highly confounded; nonaffirmatives unconfounded"
+    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.same" ] = "(A) Assume same internal bias in affirmatives and nonaffirmatives"
+    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.different" ] = "(B) Assume more internal bias in affirmatives vs. nonaffirmatives"
     
     
     # ~~ Version #1: Mhat from each analysis type -----------
