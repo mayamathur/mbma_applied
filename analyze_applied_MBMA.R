@@ -50,6 +50,10 @@ library(EValue)
 # renv::snapshot()
 
 
+# parameters to toggle
+# should we redo the somewhat slow line plots?
+redo.plots = TRUE
+
 # set working directories
 code.dir = here()
 
@@ -73,7 +77,7 @@ options(scipen=999)
 
 
 
-# ANALYZE THEM :) ---------------------------------------------------------------
+# ANALYZE BOTH METAS ---------------------------------------------------------------
 
 meta.names = c("kalantarian_all",
                "mathur")
@@ -82,7 +86,7 @@ meta.names = c("kalantarian_all",
 #meta.names = "mathur"
 
 for ( i in 1:length(meta.names) ) {
-
+  
   
   meta.name = meta.names[i]
   
@@ -97,7 +101,7 @@ for ( i in 1:length(meta.names) ) {
   # ~ Set up parameters specific to this meta-analysis -----------
   
   if ( meta.name == "kalantarian_all" ) {
-
+    
     # effect size transformation
     z.to.r = FALSE
     take.exp.inv = FALSE
@@ -109,7 +113,7 @@ for ( i in 1:length(meta.names) ) {
     
     # decide which studies are confounded
     Ci = rep(1, nrow(d))
-
+    
     # # vector of selection probabilities to use for all specifications
     # # more dense at the very small ones
     # eta.vec = rev( seq(1, 200, 0.25) )
@@ -132,7 +136,7 @@ for ( i in 1:length(meta.names) ) {
     
     # decide which studies are confounded
     Ci = ( d$randomized == FALSE )
-
+    
     # # vector of selection probabilities to use for all specifications
     # # more dense at the very small ones
     # eta.vec = rev( seq(1, 200, 0.25) )
@@ -265,9 +269,9 @@ for ( i in 1:length(meta.names) ) {
                      eta = eta,
                      EB_grid_hi = log(10),
                      q = 0)
-
   
-
+  
+  
   # and with eta = 1
   new.row = evalue_mbma(dat = d,
                         Ci = Ci,
@@ -290,12 +294,12 @@ for ( i in 1:length(meta.names) ) {
     expect_equal( exp( res2$EB_ci[ res2$eta_assumed == eta ] ),
                   res$MLo[ res$Analysis == "mbma-unadj" ],
                   tol = 0.001 )
-
+    
     
   }
   # for many more sanity checks, see 2022-7-3 check theory vs. R
   
-
+  
   cat("\nFlag3")
   
   
@@ -303,7 +307,7 @@ for ( i in 1:length(meta.names) ) {
   
   # for this one, can just directly apply E-value to worst-case estimate on RR scale
   temp = evalue( RR(res$Mhat[res$Analysis == "worst-unadj"] ),
-          RR(res$MLo[res$Analysis == "worst-unadj"] ) )
+                 RR(res$MLo[res$Analysis == "worst-unadj"] ) )
   
   # not putting Eb_est, etc. for this one because we're not reporting on that scale anyway
   res2 = res2 %>% add_row( EB_est = NA, EB_ci = NA, eval_est = temp["E-values", "point"], eval_ci = temp["E-values", "lower"], eta_assumed = Inf )
@@ -311,16 +315,200 @@ for ( i in 1:length(meta.names) ) {
   
   
   
-  # ~ Save Results Locally -----------
+  # ~ Subadditivity/superadditivity plots as in R01 ---------------------------------------------------------------
   
-  # ~~ One-off stats ---------------------------
+  if ( meta.name == "mathur" & redo.plots == TRUE ) {
+    
+    
+    # plotting dataframe
+    .eta_running = c( seq(1, 20, 1) )  # "running" to indicate this is the running var for x-axis, not the eta used in analysis
+    .group = c("None (uncorrected)", "Confounding only", "Publication bias only", "Both")
+    .EB.obs.scen = c("EB.obs.same", "EB.obs.different")
+    
+    dp = expand.grid( .eta_running,
+                      .group,
+                      .EB.obs.scen )
+    names(dp) = c("eta_running", "group", "EB_obs_scen")
+    
+    # eta to use in analysis depends on group
+    dp$eta_assumed = dp$eta_running
+    dp$eta_assumed[ dp$group %in% c("None (uncorrected)", "Confounding only") ] = 1
+    
+    # EB.obs settings to use in analysis depends on group
+    conf_scens = c("Confounding only", "Both")
+    dp$EB.nonaffirm.obs = 0
+    dp$EB.affirm.obs = 0
+    
+    dp$EB.nonaffirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.same" ] = log(1.25)
+    dp$EB.affirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.same" ] = log(1.25)
+    
+    dp$EB.nonaffirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.different" ] = log(1)
+    dp$EB.affirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.different" ] = log(1.25*2)
+    
+    # dp$EB.nonaffirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.same" ] = log(2)
+    # dp$EB.affirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.same" ] = log(2)
+    # 
+    # dp$EB.nonaffirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.different" ] = log(1)
+    # dp$EB.affirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.different" ] = log(4)
+    
+    # sanity check
+    dp %>% group_by(group, EB_obs_scen) %>%
+      summarise( mean(exp(EB.affirm.obs)),
+                 mean(exp(EB.nonaffirm.obs)) )
+    
+    
+    dp = suppressMessages( dp %>% rowwise() %>%
+                             mutate( corrected_meta_mbma(dat = d,
+                                                         cluster = d$cluster,
+                                                         Ci = Ci,  # this is a global var
+                                                         
+                                                         # sens params
+                                                         # these vars are from dp, not d
+                                                         EB.affirm.obs = EB.affirm.obs,
+                                                         EB.nonaffirm.obs = EB.nonaffirm.obs,
+                                                         
+                                                         eta = eta_assumed,
+                                                         
+                                                         # effect-size transformations for reporting
+                                                         # see report_meta for info
+                                                         transformation = transf,
+                                                         transformed.scale.name = transf.name) ) )
+    # for plotting joy
+    dp$EB_obs_scen_pretty = NA
+    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.same" ] = "Assume affirmatives and nonaffirmatives moderately confounded"
+    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.different" ] = "Assume affirmatives highly confounded; nonaffirmatives unconfounded"
+    
+    
+    # ~~ Version #1: Mhat from each analysis type -----------
+    
+    # set line colors
+    levels(dp$group)
+    colors = c("black", "#ebae34", "#3499eb", "red")
+    
+    # for choosing plot limits
+    min(dp$Mhat)
+    ymin = 1
+    
+    max(dp$Mhat)
+    ymax = 1.25
+    
+    p1 = ggplot( data = dp,
+                 # needs to be eta_running rather than eta_assumed because latter is always 1 when not correcting pub bias
+                 aes( x = eta_running,  
+                      y = Mhat,
+                      color = group ) ) +
+      
+      geom_hline( color = "black", lty = 2, yintercept = 1) +
+      geom_line(size=1) +
+      
+      
+      scale_y_continuous( limits = c(ymin, ymax),
+                          breaks = seq(ymin, ymax, 0.05),
+                          trans = "log10") +
+      
+      scale_x_continuous( limits = c(1, max(dp$eta_running)),
+                          breaks = seq(1, max(dp$eta_running), 2)) +
+      
+      ylab("Corrected pooled estimate (RR)") +
+      xlab( bquote( bold("Assumed") ~ bold(eta) ) ) +
+      
+      scale_color_manual( values = colors ) +
+      guides( color = guide_legend("Biases corrected: ") ) +
+      
+      theme_classic() + 
+      
+      facet_grid( ~ EB_obs_scen_pretty ) +
+      
+      theme_bw() +
+      theme( text = element_text(face = "bold"),
+             panel.grid.major = element_blank(),
+             panel.grid.minor = element_blank(),
+             legend.position="bottom" ) 
+    
+    
+    
+    
+    
+    
+    # ~~ Version #2: Ratio of Mhats -----------
+    
+    
+    dp2 = dp %>% filter( group %in% c("Publication bias only", "Both") )
+    
+    
+    dp2 = dp2 %>% group_by( eta_assumed, EB_obs_scen ) %>%
+      mutate( Mhat_ratio = Mhat[ group == "Publication bias only" ] /
+                Mhat[ group == "Both" ] ) %>%
+      # only need one row per eta
+      filter( !duplicated(eta_assumed) ) %>%
+      select(eta_assumed,
+             EB_obs_scen,
+             Mhat_ratio)
+    
+    min(dp2$Mhat_ratio)
+    ymin = 1
+    
+    max(dp2$Mhat_ratio)
+    ymax = 1.09
+    
+    # ratio of Mhat when correcting for both biases vs. publication bias only
+    
+    p2 = ggplot( data = dp2,
+                 aes( x = eta_assumed,
+                      y = Mhat_ratio,
+                      color = EB_obs_scen) ) +
+      
+      geom_line( size = 1.1) +
+      
+      
+      geom_hline( color = "gray",
+                  yintercept = 1,
+                  lty = 0) +
+      
+      scale_y_continuous( limits = c(ymin, ymax),
+                          breaks = seq(ymin, ymax, 0.01),
+                          trans = "log10") +
+      
+      scale_x_continuous( limits = c(1, max(dp$eta_running)),
+                          breaks = seq(1, max(dp$eta_running), 2)) +
+      
+      ylab("Ratio of Mhat corrected for pub bias / Mhat corrected for both (RR scale)") +
+      xlab(bquote(eta)) +
+      
+      guides( color = guide_legend("Estimate type") ) +
+      
+      theme_classic()
+    
+    # ~ Write Plots -----------
+    
+    my_ggsave(name = paste(meta.name, "multiple_Mhats_plot.pdf", sep = "_"),
+              .plot = p1,
+              .width = 10,
+              .height = 5)
+    
+    my_ggsave(name = paste(meta.name, "Mhat_ratio_plot.pdf", sep = "_"),
+              .plot = p2,
+              .width = 8,
+              .height = 5)
+    
+  }  # end "if ( meta.name == "mathur" & redo.plots == TRUE )"
+  
+  # ~ Write Results Tables -----------
+  
+  fwrite(res, 
+         paste(meta.name, "_corrected_metas.csv", sep = "") ) 
+  
+  fwrite(res2, 
+         paste(meta.name, "_evalues.csv", sep = "") ) 
+  
+  # ~~ Write One-Off Stats ---------------------------
   setwd(results.dir)
   update_result_csv( name = paste( meta.name, " k" ),
                      value = nrow(d) )
-
+  
   update_result_csv( name = paste( meta.name, " k affirm" ),
                      value = sum(d$affirm == TRUE) )
-
+  
   update_result_csv( name = paste( meta.name, " k nonaffirm" ),
                      value = sum(d$affirm == FALSE) )
   
@@ -334,7 +522,7 @@ for ( i in 1:length(meta.names) ) {
     update_result_csv( name = paste( meta.name, " k nonrandomized" ),
                        value = sum(d$randomized == FALSE) )
   }
-
+  
   
   # lambdas
   # @CHECK THESE! Especially naive tau issue
@@ -350,7 +538,7 @@ for ( i in 1:length(meta.names) ) {
     lambdaAc = 1
     lambdaA = 1 
   }
- 
+  
   update_result_csv( name = paste( meta.name, "lambdaAc" ),
                      value = lambdaAc )
   
@@ -365,7 +553,7 @@ for ( i in 1:length(meta.names) ) {
   update_result_csv( name = paste( meta.name, "r ratio" ),
                      value = r )
   
-
+  
   # attenuation % for uncorrected vs. fixed eta
   atten_perc = 100*( (res$Mhat[res$Analysis == "naive"] - res$Mhat[res$Analysis == "mbma-unadj"]) / res$Mhat[res$Analysis == "naive"] )
   update_result_csv( name = paste( meta.name, "attenutation perc" ),
@@ -392,246 +580,9 @@ for ( i in 1:length(meta.names) ) {
   update_result_csv( name = paste( meta.name, "eta=", res2$eta, "E-value CI" ),
                      value = res2$eval_ci )
   
-  
+} # end loop over both metas
 
-  
-  fwrite(res, 
-         paste(meta.name, "_corrected_metas.csv", sep = "") ) 
-  
-  fwrite(res2, 
-         paste(meta.name, "_evalues.csv", sep = "") ) 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  # . ----
-  # . ----
-  # UNMODIFIED CODE FROM SAPB-T ANALYSIS_GENERAL:  --------------------------------------------------------------
-  # 
-  # # Standard publication bias methods
-  # # Egger test
-  # Egger = regtest( x = d$yi,
-  #                  vi = d$vi,
-  #                  predictor = "sei")
-  # 
-  # # selection model
-  # tryCatch({
-  #   ( m1 = weightfunct( effect = d$yi,
-  #                       v = d$vi,
-  #                       steps = c(0.025, 1),
-  #                       table = TRUE ) )
-  # })
-  # 
-  # # S-Values
-  # # to shift to 0
-  # S0 = svalue( yi = d$yi,
-  #              vi = d$vi,
-  #              q = 0,
-  #              clustervar = d$cluster,
-  #              # always TRUE because we've flipped if necessary
-  #              favor.positive = TRUE,
-  #              model = "robust",
-  #              return.worst.meta = TRUE )
-  # 
-  # # to shift to q
-  # Sq = svalue( yi = d$yi,
-  #              vi = d$vi,
-  #              q = q,
-  #              clustervar = d$cluster,
-  #              # always TRUE because we've flipped if necessary
-  #              favor.positive = TRUE,
-  #              model = "robust")
-  # 
-  # 
-  # 
-  # #################### ~~ SAVE RESULTS #################### 
-  # 
-  # ##### ~~ Table for Paper #####
-  # new.row = data.frame( Meta = meta.name,
-  #                       k = nrow(d),
-  #                       EstNaive = paste( my_round( estNaive, 2 ), format_CI( loNaive, hiNaive, 2 ), sep = " " ),
-  #                       EstWorst = paste( my_round( estWorst, 2 ), format_CI( loWorst, hiWorst, 2 ), sep = " " ),
-  #                       S0 = format_sval( S0$stats$sval.est, digits = 0 ),
-  #                       S0.CI = format_sval( S0$stats$sval.ci, digits = 0 ),
-  #                       Sq = format_sval( Sq$sval.est, digits = 0 ),
-  #                       Sq.CI = format_sval( Sq$sval.ci, digits = 0 ),
-  #                       Egger.pval = format_pval(Egger$pval) )
-  # 
-  # 
-  # if ( i > 1 & exists("res") ) res = rbind( res, new.row ) else res = new.row
-  # 
-  # 
-  # ##### One-Off Stats for Paper #####
-  # 
-  # update_result_csv( name = paste( meta.name, " k" ),
-  #                    value = nrow(d) )
-  # 
-  # update_result_csv( name = paste( meta.name, " k affirm" ),
-  #                    value = sum(d$affirm == TRUE) )
-  # 
-  # update_result_csv( name = paste( meta.name, " k nonaffirm" ),
-  #                    value = sum(d$affirm == FALSE) )
-  # 
-  # update_result_csv( name = paste( meta.name, " k" ),
-  #                    value = nrow(d) )
-  # 
-  # update_result_csv( name = paste( meta.name, "estNaive" ),
-  #                    value = my_round( estNaive, 2 ) )
-  # 
-  # update_result_csv( name = paste( meta.name, "estNaive lo" ),
-  #                    value = my_round( loNaive, 2 ) )
-  # 
-  # update_result_csv( name = paste( meta.name, "estNaive hi" ),
-  #                    value = my_round( hiNaive, 2 ) )
-  # 
-  # update_result_csv( name = paste( meta.name, "estNaive pval" ),
-  #                    value = format.pval( pvalNaive, eps = 0.0001 ) )
-  # 
-  # 
-  # 
-  # 
-  # #################### ~~ LINE PLOT #################### 
-  # 
-  # # needed later even if we're not redoing line plot
-  # axis.font.size = 16
-  # axis.label.size = 20
-  # 
-  # if ( redo.line.plot == TRUE ) {
-  #   
-  #   # get estimates at each value
-  #   res.list = lapply( el, 
-  #                      function(x) {
-  #                        
-  #                        cat("\n Working on eta = ", x)
-  #                        
-  #                        return( corrected_meta( yi = d$yi, 
-  #                                                vi = d$vi,
-  #                                                eta = x,
-  #                                                clustervar = d$cluster,
-  #                                                model = "robust",
-  #                                                favor.positive = TRUE) )
-  #                      } )
-  #   
-  #   
-  #   re.rob.ests = as.data.frame( do.call( "rbind", res.list ) )
-  #   
-  #   # save results because lapply above is slow
-  #   # because each column is secretly a list, impeding write.csv
-  #   re.rob.ests = as.data.frame( apply(re.rob.ests, 2, unlist) )
-  #   
-  #   ##### ~~ Make Plot #####
-  #   
-  #   # simplify breaks a little compared to eta
-  #   breaks = c(200, 150, 100, 50, 40, 30, 20, 10, 5)
-  #   axis.font.size = 16
-  #   axis.label.size = 20
-  #   
-  #   if (meta.name == "Li") ylabel = "Corrected estimate (HR)"
-  #   if (meta.name == "Ali") ylabel = "Corrected estimate (BMD % change)"
-  #   
-  #   p.rob = ggplot( ) +
-  #     # "q" line
-  #     geom_hline( yintercept = transf(q), lty = 2) +
-  #     
-  #     # point ests will be the same for worst-case, so doesn't matter
-  #     geom_hline( yintercept = estWorst, color = "red", lty = 2 ) +
-  #     
-  #     geom_ribbon( data = re.rob.ests, aes( x = eta, ymin = transf(lo), ymax = transf(hi) ), fill = "black", alpha = .1) +
-  #     
-  #     geom_line( data = re.rob.ests, aes( x = eta, y = transf(est) ), color = "black", lwd = 1.2) +
-  #     
-  #     xlab( bquote( "Severity of hypothetical publication bias" ~ (eta) ) ) +
-  #     ylab( ylabel ) + 
-  #     
-  #     #xlab( bquote( eta ) ) +
-  #     #ylab( bquote(  hat(mu)[eta]^"'"  ) ) +
-  #     
-  #     #scale_x_continuous( limits = c(1, max(breaks)), breaks = breaks ) +
-  #     
-  #     theme_classic() + 
-  #     
-  #     theme(axis.title = element_text(size=axis.label.size),
-  #           axis.text = element_text(size=axis.font.size) ) 
-  #   
-  #   
-  #   # if (meta.name == "Li 2018") p.rob = p.rob + scale_y_continuous( limits = c( 0.8, 1.4 ),
-  #   #                                                            breaks = seq( 0.8, 1.4, 0.1 ) )
-  #   
-  #   p.rob
-  #   # LOOKS GREAT! 
-  # }
-  # 
-  # 
-  # 
-  # #################### ~~ SIGNIFICANCE FUNNEL PLOT #################### 
-  # 
-  # 
-  # if ( meta.name == "Li 2018" ) {
-  #   xmin = -0.6  # these aren't being used
-  #   xlabel = "Point estimate (log-HR; signs recoded)"
-  # }
-  # 
-  # if (meta.name == "Alibhai 2017" ){
-  #   xmin = 0
-  #   xlabel = "Point estimate (BMD % change)"
-  # }
-  # 
-  # p.funnel = suppressWarnings( significance_funnel( yi = d$yi,
-  #                                                   vi = d$vi,
-  #                                                   xmin = xmin,
-  #                                                   xlab = xlabel,
-  #                                                   favor.positive = TRUE,
-  #                                                   est.N = estWorst,  # on analysis scale, not transformed to original scale
-  #                                                   est.all = estNaive,
-  #                                                   alpha = 0.05,
-  #                                                   plot.pooled = TRUE ) )
-  # 
-  # p.funnel = p.funnel + 
-  #   theme(axis.title = element_text(size=axis.label.size),
-  #         axis.text = element_text(size=axis.font.size) ) 
-  # 
-  # 
-  # #################### ~~ SAVE ALL THE THINGS #################### 
-  # 
-  # # plots
-  # if ( redo.line.plot == TRUE ) ggsave( filename = paste( meta.name, "_robu_plot.png", sep = "" ),
-  #                                       device = "png",
-  #                                       p.rob,
-  #                                       width = 9,
-  #                                       height = 6)
-  # 
-  # ggsave( filename = paste( meta.name, "_funnel.png", sep = "" ),
-  #         device = "png",
-  #         p.funnel,
-  #         width = 6,
-  #         height = 4)
-  # 
-  # # also save straight to Overleaf
-  # setwd(overleaf.dir)
-  # if ( redo.line.plot == TRUE ) ggsave( filename = paste( meta.name, "_robu_plot.png", sep = "" ),
-  #                                       device = "png",
-  #                                       p.rob,
-  #                                       width = 9,
-  #                                       height = 6)
-  # 
-  # ggsave( filename = paste( meta.name, "_funnel.png", sep = "" ),
-  #         device = "png",
-  #         p.funnel,
-  #         width = 6,
-  #         height = 4)
-  # 
-  
-  
-}  # end huge for-loop over meta-analyses
+
 
 
 
