@@ -151,8 +151,9 @@ for ( i in 1:length(meta.names) ) {
                        studynum = cluster,
                        var.eff.size = vi,
                        small = TRUE ) )
+
   
-  # from AWR (note use of hierarchical model weights):
+  # from AWR analysis code (note use of hierarchical model weights):
   # ( meta.rob = robu( logRR ~ 1,
   #                    data = d,
   #                    studynum = as.factor(authoryear),
