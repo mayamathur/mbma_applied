@@ -103,13 +103,6 @@ for ( i in 1:length(meta.names) ) {
     
     # decide which studies are confounded
     Ci = rep(1, nrow(d))
-    
-    # # vector of selection probabilities to use for all specifications
-    # # more dense at the very small ones
-    # eta.vec = rev( seq(1, 200, 0.25) )
-    # #eta.vec = c( 20, rev(seq(1,15,1)) )
-    # # as a list
-    # el = as.list( eta.vec )
   }
   
   
@@ -126,13 +119,7 @@ for ( i in 1:length(meta.names) ) {
     
     # decide which studies are confounded
     Ci = ( d$randomized == FALSE )
-    
-    # # vector of selection probabilities to use for all specifications
-    # # more dense at the very small ones
-    # eta.vec = rev( seq(1, 200, 0.25) )
-    # #eta.vec = c( 20, rev(seq(1,15,1)) )
-    # # as a list
-    # el = as.list( eta.vec )
+  
   }
   
   
@@ -366,8 +353,8 @@ for ( i in 1:length(meta.names) ) {
                                                          transformed.scale.name = transf.name) ) )
     # for plotting joy
     dp$EB_obs_scen_pretty = NA
-    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.same" ] = "(A) Assume same internal bias in affirmatives and nonaffirmatives"
-    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.different" ] = "(B) Assume more internal bias in affirmatives vs. nonaffirmatives"
+    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.same" ] = "(a) Assume same internal bias in affirmatives and nonaffirmatives"
+    dp$EB_obs_scen_pretty[ dp$EB_obs_scen == "EB.obs.different" ] = "(b) Assume more internal bias in affirmatives vs. nonaffirmatives"
     
     
     # ~~ Version #1: Mhat from each analysis type -----------
@@ -514,9 +501,21 @@ for ( i in 1:length(meta.names) ) {
     
     update_result_csv( name = paste( meta.name, " k nonrandomized" ),
                        value = sum(d$randomized == FALSE) )
+    
+    
+    update_result_csv( name = paste( meta.name, " perc low ROB" ),
+                       value = round( 100 * mean( d$qual.exch == "a.Low" ) ) )
+    
+    update_result_csv( name = paste( meta.name, " perc affirm low ROB" ),
+                       value = round( 100 * mean( d$qual.exch[ d$affirm == TRUE] == "a.Low" ) ) )
+    
+    update_result_csv( name = paste( meta.name, " perc nonaffirm low ROB" ),
+                       value = round( 100 * mean( d$qual.exch[ d$affirm == FALSE] == "a.Low" ) ) )
+    
   }
   
   
+
   # lambdas
   # @CHECK THESE! Especially naive tau issue
   d$wi = 1/(d$vi + res$Shat[ res$Analysis == "naive" ]^2)
@@ -564,6 +563,9 @@ for ( i in 1:length(meta.names) ) {
   
   update_result_csv( name = paste( meta.name, "Analysis=", res$Analysis, "MPval" ),
                      value = res$MPval )
+  
+  update_result_csv( name = paste( meta.name, "Analysis=", res$Analysis, "Shat" ),
+                     value = res$Shat )
   
   
   # save all E-values
