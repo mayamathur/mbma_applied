@@ -1,12 +1,15 @@
 
-# Note: This script shares a stats_for_paper.csv with the applied examples, so if you wr(), 
+
+# NOTES ---------------------------------------------------------------
+
+# Below, "SAPB" (sensitivity analysis for publication bias) refers to estimates that correct only for publication bias;
+#  "MBMA" (multiple-bias meta-analysis) refers to estimates that correct for both internal bias and publication bias
+
+# This script shares a stats_for_paper.csv with the applied examples, so if you wr(), 
 #  you'll also need to rerun the applied examples.
 
 # Notation in results files:
 #  - "unadj" suffix in analysis name means unadjusted for confounding, but could be adjusted for pub bias
-
-# To do:
-# - If using AWR in paper, note that for that analysis, I used modelweights = HIER, which slightly affects naive meta-analysis results
 
 
 # PRELIMINARIES ---------------------------------------------------------------
@@ -42,7 +45,7 @@ library(EValue)
 
 # parameters to toggle
 # should we redo the somewhat slow line plots?
-redo.plots = TRUE
+redo.plots = FALSE
 
 # set working directories
 code.dir = here()
@@ -55,6 +58,7 @@ results.dir = str_replace_all( string = here(),
                                pattern = "Code",
                                replacement = "Results" ) 
 
+# write results directly to directory containing manuscript in Overleaf
 overleaf.dir = "/Users/mmathur/Dropbox/Apps/Overleaf/Multiple-bias meta-analysis Overleaf (MBMA)/R_objects"
 
 
@@ -140,7 +144,7 @@ for ( i in 1:length(meta.names) ) {
                        small = TRUE ) )
 
   
-  # from AWR analysis code (note use of hierarchical model weights):
+  # from meta-analysts' analysis code (differs slightly because uses hierarchical model weights):
   # ( meta.rob = robu( logRR ~ 1,
   #                    data = d,
   #                    studynum = as.factor(authoryear),
@@ -323,12 +327,7 @@ for ( i in 1:length(meta.names) ) {
     dp$EB.nonaffirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.different" ] = log(1)
     dp$EB.affirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.different" ] = log(1.25*2)
     
-    # dp$EB.nonaffirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.same" ] = log(2)
-    # dp$EB.affirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.same" ] = log(2)
-    # 
-    # dp$EB.nonaffirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.different" ] = log(1)
-    # dp$EB.affirm.obs[ dp$group %in% conf_scens & dp$EB_obs_scen == "EB.obs.different" ] = log(4)
-    
+
     # sanity check
     dp %>% group_by(group, EB_obs_scen) %>%
       summarise( mean(exp(EB.affirm.obs)),
@@ -495,6 +494,9 @@ for ( i in 1:length(meta.names) ) {
   update_result_csv( name = paste( meta.name, " k perc nonaffirm" ),
                      value = mean(d$affirm == FALSE)*100 )
   
+  update_result_csv( name = paste( meta.name, " k perc affirm" ),
+                     value = mean(d$affirm == TRUE)*100 )
+  
   if ( meta.name == "mathur" ) {
     update_result_csv( name = paste( meta.name, " k randomized" ),
                        value = sum(d$randomized == TRUE) )
@@ -517,7 +519,6 @@ for ( i in 1:length(meta.names) ) {
   
 
   # lambdas
-  # @CHECK THESE! Especially naive tau issue
   d$wi = 1/(d$vi + res$Shat[ res$Analysis == "naive" ]^2)
   
   if ( meta.name == "mathur" ) {

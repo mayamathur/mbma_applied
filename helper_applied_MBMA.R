@@ -1,7 +1,102 @@
 
+# Corrected estimate, Mhat_adj, for specified publication bias and internal bias
+# - dat: dataset, which must contain column of two-tailed p-values called "pval", point estimates "yi", variances "vi"
+#   point estimates must be on log-RR scale if using g-transformation
+# - cluster: indicator for clusters of point estimates, if needed
+# - Ci: indicator for whether each study is internally biased
+# - EB.affirm.obs: muB|A=1 as defined in paper
+# - EB.nonaffirm.obs: muB|A=0 as defined in paper
+# - eta: selection ratio
+# - transformation: g-transformation to go from MULTIPLICATIVE bias factor to your E-value of choice
+#      depending on type of bias (defaults to no transformation); see report_meta for more information
+corrected_meta_mbma = function(dat,
+                               cluster = 1:nrow(dat),
+                               Ci,
+                               
+                               # sens params (on log scale)
+                               EB.affirm.obs,
+                               EB.nonaffirm.obs,
+                               eta,
+                               
+                               # effect-size transformations for reporting
+                               # see report_meta for info
+                               transformation = function(x) x,
+                               transformed.scale.name = "",
+                               
+                               # for pasting the analysis label
+                               suffix = NA
+) {
+  
+  dat$Ci = Ci
+  dat$cluster = cluster
+  
+  # assumes favor.positive = TRUE or that estimates are already direction-flipped
+  dat$affirm = dat$pval < 0.05 & dat$yi > 0
+  
+  # get P(A^*_i = 1 | C^*_i = 1) from P(A^*_i = 1 | C^*_i = 1, D^*_i = 1) 
+  P.affirm.pub = mean( dat$affirm[ dat$Ci == 1 ] )
+  # and P(A^*_i = 0 | C^*_i = 1):
+  P.nonaffirm.pub = 1 - P.affirm.pub
+  
+  
+  denom = P.affirm.pub + eta * P.nonaffirm.pub
+  
+  # a sample estimate of muB*
+  # but note that if you set EB.affirm.obs = EB.nonaffirm.obs, MhatB = muB
+  ( MhatB = (1/denom) * ( P.nonaffirm.pub * eta * EB.nonaffirm.obs +
+                            P.affirm.pub * EB.affirm.obs ) )
+  
+  # c.f. bias in *published* studies (will be larger than MhatB):
+  #  P.nonaffirm.pub * EB.nonaffirm.obs + P.affirm.pub * EB.affirm.obs
+  
+  # adjusted yi's using the estimated MhatB
+  dat$yi.adj.est = dat$yi - dat$Ci * MhatB
+  
+  
+  weights = rep( 1, length(dat$yi.adj.est) )
+  # weight based on the affirm indicator of the *confounded* estimates
+  weights[ dat$affirm == FALSE ] = eta
+  
+  # initialize a dumb (unclustered and uncorrected) version of tau^2
+  # which is only used for constructing weights
+  meta.re = rma.uni( yi = dat$yi.adj.est,
+                     vi = dat$vi)
+  t2hat.naive = meta.re$tau2 
+  
+  
+  # fit weighted robust model
+  meta.mbma = robu( yi.adj.est ~ 1,
+                    studynum = cluster,
+                    data = dat,
+                    userweights = weights / (vi + t2hat.naive),
+                    var.eff.size = vi,
+                    small = TRUE )
+  
+  # sanity check: compare to direct calculation of user-weighted estimator
+  expect_equal( as.numeric( meta.mbma$b.r ),
+                sum( dat$yi.adj.est * ( weights / (dat$vi + t2hat.naive) ) ) / sum( weights / (dat$vi + t2hat.naive) ) )
+  
+  label = ifelse( is.na(suffix), "mbma", paste("mbma", suffix, sep = "-") )
+  .res = report_meta(meta.mbma,
+                     .mod.type = "robu",
+                     .analysis.label = label,
+                     .transformation = transformation,
+                     .transformed.scale.name = transformed.scale.name)
+  
+  # add more info
+  .res$eta_assumed = eta
+  .res$EB.affirm.obs_assumed = EB.affirm.obs
+  .res$EB.nonaffirm.obs = EB.nonaffirm.obs
+  
+  return(.res)
+  
+}
 
-# E-value (i.e., confounding in published affirms AND in nonaffirms) for a fixed choice of eta
-# evalue.transf = transformation to go from MULTIPLICATIVE bias factor to your E-value of choice depending on type of bias
+
+# E-value (i.e., g(muB*)) for a fixed choice of eta
+# args: see corrected_meta above
+# EB_grid_hi: largest value of EB to consider in grid search
+# q: value to which to shift Mhat_adj
 evalue_mbma = function(dat,
                        Ci,
                        eta,
@@ -94,92 +189,6 @@ evalue_mbma = function(dat,
 
 
 
-# dat must already have p-value
-corrected_meta_mbma = function(dat,
-                               cluster = 1:nrow(dat),
-                               Ci,
-                               
-                               # sens params (on log scale)
-                               EB.affirm.obs,
-                               EB.nonaffirm.obs,
-                               eta,
-                               
-                               # effect-size transformations for reporting
-                               # see report_meta for info
-                               transformation = function(x) x,
-                               transformed.scale.name = "",
-                               
-                               # for pasting the analysis label
-                               suffix = NA
-) {
-  
-  dat$Ci = Ci
-  dat$cluster = cluster
-  
-  # assumes favor.positive = TRUE or that estimates are already direction-flipped
-  dat$affirm = dat$pval < 0.05 & dat$yi > 0
-  
-  # get P(A^*_i = 1 | C^*_i = 1) from P(A^*_i = 1 | C^*_i = 1, D^*_i = 1) 
-  P.affirm.pub = mean( dat$affirm[ dat$Ci == 1 ] )
-  # and P(A^*_i = 0 | C^*_i = 1):
-  P.nonaffirm.pub = 1 - P.affirm.pub
-  
-  
-  denom = P.affirm.pub + eta * P.nonaffirm.pub
-  
-  # called "gamma" on iPad
-  # a sample estimate of muB
-  #@but note that if you set EB.affirm.obs = EB.nonaffirm.obs, MhatB = muB
-  ( MhatB = (1/denom) * ( P.nonaffirm.pub * eta * EB.nonaffirm.obs +
-                            P.affirm.pub * EB.affirm.obs ) )
-  
-  # c.f. bias in *published* studies (will be larger than MhatB):
-  #  P.nonaffirm.pub * EB.nonaffirm.obs + P.affirm.pub * EB.affirm.obs
-  
-  
-  # adjusted yi's using the estimated MhatB
-  dat$yi.adj.est = dat$yi - dat$Ci * MhatB
-  
-  
-  weights = rep( 1, length(dat$yi.adj.est) )
-  # weight based on the affirm indicator of the *confounded* estimates
-  #@note change from SAPB code
-  weights[ dat$affirm == FALSE ] = eta
-  
-  # initialize a dumb (unclustered and uncorrected) version of tau^2
-  # which is only used for constructing weights
-  meta.re = rma.uni( yi = dat$yi.adj.est,
-                     vi = dat$vi)
-  t2hat.naive = meta.re$tau2  #@ could subtract off the sig2B here, but would also need to account for some studies' being unconfounded
-  
-  
-  # fit weighted robust model
-  meta.mbma = robu( yi.adj.est ~ 1,
-                    studynum = cluster,
-                    data = dat,
-                    userweights = weights / (vi + t2hat.naive),
-                    var.eff.size = vi,
-                    small = TRUE )
-  
-  # sanity check: compare to direct calculation of user-weighted estimator
-  expect_equal( as.numeric( meta.mbma$b.r ),
-                sum( dat$yi.adj.est * ( weights / (dat$vi + t2hat.naive) ) ) / sum( weights / (dat$vi + t2hat.naive) ) )
-  
-  label = ifelse( is.na(suffix), "mbma", paste("mbma", suffix, sep = "-") )
-  .res = report_meta(meta.mbma,
-                     .mod.type = "robu",
-                     .analysis.label = label,
-                     .transformation = transformation,
-                     .transformed.scale.name = transformed.scale.name)
-  
-  # add more info
-  .res$eta_assumed = eta
-  .res$EB.affirm.obs_assumed = EB.affirm.obs
-  .res$EB.nonaffirm.obs = EB.nonaffirm.obs
-  
-  return(.res)
-  
-}
 
 
 
@@ -366,8 +375,6 @@ format_pval = function(p) {
 # nicely report a metafor or robumeta object with optional suffix to denote which model
 # in case yi's have been transformed, applies function .transformation to put Mhat and its CI on interpretable scale (e.g., set .transformation = function(x) exp(x) if yi's are log-RRs)
 # **Shat and its CI will NOT be transformed
-
-
 report_meta = function(.mod,
                        .mod.type = "rma",  # "rma" or "robu"
                        .transformation = function(x) x,  
