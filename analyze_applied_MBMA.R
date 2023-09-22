@@ -58,7 +58,10 @@ results.dir = str_replace_all( string = here(),
                                pattern = "Code",
                                replacement = "Results" ) 
 
-# write results directly to directory containing manuscript in Overleaf
+# write results directly to directory containing manuscript in Overleaf so stats can be piped directly into text
+# this is an absolute path because it must live in Dropbox, outside the project directory, in order to sync with Overleaf
+# to reproduce results, just set this to any directory on your local machine
+# results will be written to a csv file in that location
 overleaf.dir = "/Users/mmathur/Dropbox/Apps/Overleaf/Multiple-bias meta-analysis Overleaf (MBMA)/R_objects"
 
 
@@ -77,7 +80,7 @@ meta.names = c("kalantarian_all",
                "mathur")
 
 # to run only one
-#meta.names = "mathur"
+# meta.names = "mathur"
 
 for ( i in 1:length(meta.names) ) {
   
@@ -159,9 +162,7 @@ for ( i in 1:length(meta.names) ) {
                     .transformation = transf,
                     .transformed.scale.name = transf.name)
   
-  
-  cat("\nFlag1")
-  
+
   # ~ Worst-case SAPB without confounding adjustment -----------
   
   # fit weighted robust model
@@ -204,17 +205,17 @@ for ( i in 1:length(meta.names) ) {
   
   # **sanity check vs. existing R package:
   # MBMA should agree with SAPB when there's no confounding
-  meta.SAPB.check = PublicationBias::corrected_meta(yi = d$yi,
+  meta.SAPB.check = PublicationBias::pubbias_meta(yi = d$yi,
                                                     vi = d$vi,
                                                     cluster = d$cluster,
-                                                    eta = eta,
-                                                    model = "robust",
-                                                    favor.positive = TRUE)
+                                                    selection_ratio = eta,
+                                                    model_type = "robust",
+                                                    favor_positive = TRUE)
   
-  expect_equal( meta.SAPB.row$Mhat, transf(meta.SAPB.check$est) )
-  expect_equal( meta.SAPB.row$MLo, transf(meta.SAPB.check$lo) )
-  expect_equal( meta.SAPB.row$MHi, transf(meta.SAPB.check$hi) )
-  expect_equal( meta.SAPB.row$MPval, meta.SAPB.check$pval )
+  expect_equal( meta.SAPB.row$Mhat, transf(meta.SAPB.check$stats$estimate) )
+  expect_equal( meta.SAPB.row$MLo, transf(meta.SAPB.check$stats$ci_lower) )
+  expect_equal( meta.SAPB.row$MHi, transf(meta.SAPB.check$stats$ci_upper) )
+  expect_equal( meta.SAPB.row$MPval, meta.SAPB.check$stats$p_value )
   
   
   
@@ -472,6 +473,40 @@ for ( i in 1:length(meta.names) ) {
     
   }  # end "if ( meta.name == "mathur" & redo.plots == TRUE )"
   
+  
+  
+  
+  # ~ Diagnostic plots ---------------------------------------------------------------
+  
+  if ( meta.name == "mathur" & redo.plots == TRUE ) {
+    
+    p3 = PublicationBias::pval_plot(yi = d$yi,
+                                    vi = d$vi) 
+    
+    
+    p4 = phacking::z_density(yi = d$yi,
+                             vi = d$vi) 
+    
+    p4 = phacking::z_density(yi = d$yi[ Ci == 1 ],
+                             vi = d$vi[ Ci == 1 ]) 
+    
+    p4 = phacking::z_density(yi = d$yi[ Ci == 0 ],
+                             vi = d$vi[ Ci == 0 ]) 
+    
+    # ~ Write Plots -----------
+    
+    # my_ggsave(name = paste(meta.name, "multiple_Mhats_plot.pdf", sep = "_"),
+    #           .plot = p1,
+    #           .width = 16,
+    #           .height = 8)
+    # 
+    # my_ggsave(name = paste(meta.name, "Mhat_ratio_plot.pdf", sep = "_"),
+    #           .plot = p2,
+    #           .width = 10,
+    #           .height = 8)
+    
+  }  # end "if ( meta.name == "mathur" & redo.plots == TRUE )"
+  
   # ~ Write Results Tables -----------
   
   fwrite(res, 
@@ -496,6 +531,9 @@ for ( i in 1:length(meta.names) ) {
   
   update_result_csv( name = paste( meta.name, " k perc affirm" ),
                      value = mean(d$affirm == TRUE)*100 )
+  
+  update_result_csv( name = paste( meta.name, " n clusters" ),
+                     value = length(unique(d$cluster)) )
   
   if ( meta.name == "mathur" ) {
     update_result_csv( name = paste( meta.name, " k randomized" ),

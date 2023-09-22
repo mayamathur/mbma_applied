@@ -52,9 +52,12 @@ options(scipen=999)
 # EXAMPLE: MEAT CONSUMPTION -----------------------------------------
 
 # using this meta-analysis because has a clear randomized vs. nonrandomized indicator
-setwd("~/Dropbox/Personal computer/Reference sheets/Library of prepped example meta-analyses/MRM")
+# same as the copy here:
+#setwd("~/Dropbox/Personal computer/Reference sheets/Library of prepped example meta-analyses/MRM")
+setwd(data.dir)
+setwd("Before running prep script")
 
-d = fread("mathur_awr_prepped.csv")
+d = fread("mathur_awr_generically_prepped.csv")
 
 d = d %>% filter( exclude.main == FALSE )
 expect_equal( nrow(d), 100 )
